@@ -9,8 +9,20 @@ defmodule CloudWatch do
   alias CloudWatch.InputLogEvent
   alias CloudWatch.AwsProxy
 
-  def init(_) do
-    state = configure(Application.get_env(:logger, CloudWatch, []))
+  def init(_args) do
+    state = configure([])
+
+    # If AWS keys are not defined statically, get them from the instance metadata.
+    # This may fail while the instance is starting up, so retry quickly.
+    # Otherwise refresh every 10 minutes, as the keys expire periodically.
+    unless state.access_key_id do
+      if state.client do
+        Process.send_after(self(), :refresh_creds, 300_000)
+      else
+        Process.send_after(self(), :refresh_creds, 200)
+      end
+    end
+
     Process.send_after(self(), :flush, state.max_timeout)
     {:ok, state}
   end
@@ -39,13 +51,23 @@ defmodule CloudWatch do
   end
 
   def handle_event(:flush, state) do
-    {:ok, Map.merge(state, %{buffer: [], buffer_size: 0})}
+    {:ok, %{state | buffer: [], buffer_size: 0}}
   end
 
   def handle_info(:flush, state) do
     {:ok, flushed_state} = flush(state, force: true)
     Process.send_after(self(), :flush, state.max_timeout)
     {:ok, flushed_state}
+  end
+
+  def handle_info(:refresh_creds, state) do
+    state = configure_aws(state)
+    if state.client do
+      Process.send_after(self(), :refresh_creds, 300_000)
+    else
+      Process.send_after(self(), :refresh_creds, 200)
+    end
+    {:ok, state}
   end
 
   def handle_info(_msg, state) do
@@ -60,34 +82,82 @@ defmodule CloudWatch do
     :ok
   end
 
+  @spec configure(Keyword.t) :: Map.t
   defp configure(opts) do
     opts = Keyword.merge(Application.get_env(:logger, CloudWatch, []), opts)
-    format = Logger.Formatter.compile(Keyword.get(opts, :format, @default_format))
-    level = Keyword.get(opts, :level, @default_level)
-    log_group_name = Keyword.get(opts, :log_group_name)
-    log_stream_name = Keyword.get(opts, :log_stream_name)
-    max_buffer_size = Keyword.get(opts, :max_buffer_size, @default_max_buffer_size)
-    max_timeout = Keyword.get(opts, :max_timeout, @default_max_timeout)
 
-    # AWS configuration, only if needed by the AWS library
-    region = Keyword.get(opts, :region)
-    access_key_id = Keyword.get(opts, :access_key_id)
-    endpoint = Keyword.get(opts, :endpoint, @default_endpoint)
-    secret_access_key = Keyword.get(opts, :secret_access_key)
-    client = AwsProxy.client(access_key_id, secret_access_key, region, endpoint)
-    %{buffer: [], buffer_size: 0, client: client, format: format, level: level, log_group_name: log_group_name,
-      log_stream_name: log_stream_name, max_buffer_size: max_buffer_size, max_timeout: max_timeout,
-      sequence_token: nil, flushed_at: nil}
+    state = %{
+      access_key_id: opts[:access_key_id],
+      secret_access_key: opts[:secret_access_key],
+      region: opts[:region] || metadata_region(),
+      endpoint: opts[:endpoint] || metadata_endpoint(),
+      client: nil,
+      buffer: [], buffer_size: 0,
+      level: opts[:level] || @default_level,
+      format: Logger.Formatter.compile(opts[:format] || @default_format),
+      log_group_name: opts[:log_group_name],
+      log_stream_name: opts[:log_stream_name],
+      max_buffer_size: opts[:max_buffer_size] || @default_max_buffer_size,
+      max_timeout: opts[:max_timeout] || @default_max_timeout,
+      sequence_token: nil, flushed_at: nil
+    }
+
+    if state.access_key_id do
+      %{state | client: AwsProxy.client(state.access_key_id, state.secret_access_key, state.region, state.endpoint)}
+    else
+      configure_aws(state)
+    end
   end
 
-  defp flush(_state, _opts \\ [force: false])
+  defp configure_aws(state) do
+    case System.get_env("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI") do
+      nil ->
+        # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
+        case get_metadata("http://169.254.169.254/latest/meta-data/iam/security-credentials/") do
+          {:ok, ""} ->
+            state
+          {:ok, role} ->
+            {:ok, json} = get_metadata("http://169.254.169.254/latest/meta-data/iam/security-credentials/" <> role)
+            creds = Poison.Parser.parse!(json)
+            access_key_id = Map.get(creds, "AccessKeyId")
+            secret_access_key = Map.get(creds, "SecretAccessKey")
+            region = state.region || metadata_region()
+            endpoint = state.endpoint || metadata_endpoint() || @default_endpoint
+            client = AwsProxy.client(access_key_id, secret_access_key, region, endpoint)
+
+            log_stream_name = state.log_stream_name || metadata_instance_id()
+
+            %{state | client: client, log_stream_name: log_stream_name}
+          _ ->
+            state
+        end
+      uri ->
+        # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-iam-roles.html
+        case get_metadata("http://169.254.170.2" <> uri) do
+          {:ok, json} ->
+            creds = Poison.Parser.parse!(json)
+            access_key_id = Map.get(creds, "AccessKeyId")
+            secret_access_key = Map.get(creds, "SecretAccessKey")
+            region = state.region
+            endpoint = state.endpoint || @default_endpoint
+            client = AwsProxy.client(access_key_id, secret_access_key, region, endpoint)
+            %{state | client: client}
+          _ ->
+            state
+        end
+    end
+  end
+
+  defp flush(state, opts \\ [force: false])
 
   defp flush(%{buffer: buffer, buffer_size: buffer_size, max_buffer_size: max_buffer_size} = state, [force: false])
     when buffer_size < max_buffer_size and length(buffer) < 10_000 do
       {:ok, state}
   end
-  
-  defp flush(%{buffer: []} = state, _opts), do: {:ok, state}  
+
+  defp flush(%{buffer: []} = state, _opts), do: {:ok, state}
+
+  defp flush(%{client: nil} = state, _opts), do: {:ok, state}
 
   defp flush(state, opts) do
     case AwsProxy.put_log_events(state.client, %{logEvents: Enum.sort_by(state.buffer, &(&1.timestamp)),
@@ -116,4 +186,40 @@ defmodule CloudWatch do
           |> flush(opts)
     end
   end
+
+  defp get_metadata(url) do
+    case HTTPoison.get(url) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        {:ok, body}
+      _ ->
+        nil
+    end
+  end
+
+  defp get_metadata!(url) do
+    case HTTPoison.get(url) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        body
+      _ ->
+        nil
+    end
+  end
+
+  defp metadata_endpoint do
+    get_metadata!("http://169.254.169.254/latest/meta-data/services/domain")
+  end
+
+  defp metadata_instance_id do
+    get_metadata!("http://169.254.169.254/latest/meta-data/instance-id")
+  end
+
+  defp metadata_region do
+    case HTTPoison.get("http://169.254.169.254/latest/meta-data/placement/availability-zone") do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        String.slice(body, Range.new(0, -2))
+      _ ->
+        nil
+    end
+  end
+
 end
