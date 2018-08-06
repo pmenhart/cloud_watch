@@ -17,7 +17,7 @@ defmodule CloudWatch.Mixfile do
   #
   # Type "mix help compile.app" for more information
   def application do
-    [applications: [:logger]]
+    [applications: [:logger, :hackney]]
   end
 
   # This makes sure your factory and any other modules in test/support are compiled
@@ -35,7 +35,9 @@ defmodule CloudWatch.Mixfile do
   #
   # Type "mix help deps" for more examples and options
   defp deps do
-    [{:aws, "~> 0.5.0", optional: true},
+    [
+     {:aws, "~> 0.5.0", optional: true},
+     {:ex_aws, "~> 2.0"},
      {:httpoison, "~> 0.11.1"},
      {:credo, "~> 0.4.13", only: :dev},
      {:mock, "~> 0.2.0", only: :test},
