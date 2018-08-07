@@ -39,6 +39,7 @@ defmodule CloudWatch.Mixfile do
      {:aws, "~> 0.5.0", optional: true},
      {:ex_aws, "~> 2.0"},
      {:poison, "~> 3.0"},
+     {:hackney, "~> 1.0"},
      {:credo, "~> 0.4.13", only: :dev},
      {:mock, "~> 0.2.0", only: :test},
      {:ex_doc, ">= 0.0.0", only: :dev}]
