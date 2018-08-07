@@ -118,7 +118,7 @@ defmodule CloudWatch do
             state
           {:ok, role} ->
             {:ok, json} = get_metadata("http://169.254.169.254/latest/meta-data/iam/security-credentials/" <> role)
-            creds = Poison.Parser.parse!(json)
+            {:ok, creds} = Poison.decode(json)
             access_key_id = Map.get(creds, "AccessKeyId")
             secret_access_key = Map.get(creds, "SecretAccessKey")
             region = state.region || metadata_region()
@@ -135,7 +135,7 @@ defmodule CloudWatch do
         # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-iam-roles.html
         case get_metadata("http://169.254.170.2" <> uri) do
           {:ok, json} ->
-            creds = Poison.Parser.parse!(json)
+            {:ok, creds} = Poison.decode(json)
             access_key_id = Map.get(creds, "AccessKeyId")
             secret_access_key = Map.get(creds, "SecretAccessKey")
             region = state.region
