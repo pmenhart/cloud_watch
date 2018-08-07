@@ -188,21 +188,34 @@ defmodule CloudWatch do
   end
 
   defp get_metadata(url) do
-    case HTTPoison.get(url) do
-      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
-        {:ok, body}
+    case :hackney.request(:get, url, [], "", []) do
+      {:ok, 200, _resp_headers, client_ref} ->
+        :hackney.body(client_ref)
       _ ->
         nil
     end
+    # case HTTPoison.get(url) do
+    #   {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+    #     {:ok, body}
+    #   _ ->
+    #     nil
+    # end
   end
 
   defp get_metadata!(url) do
-    case HTTPoison.get(url) do
-      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+    case :hackney.request(:get, url, [], "", []) do
+      {:ok, 200, _resp_headers, client_ref} ->
+        {:ok, body} = :hackney.body(client_ref)
         body
       _ ->
         nil
     end
+    # case HTTPoison.get(url) do
+    #   {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+    #     body
+    #   _ ->
+    #     nil
+    # end
   end
 
   defp metadata_endpoint do
@@ -214,12 +227,20 @@ defmodule CloudWatch do
   end
 
   defp metadata_region do
-    case HTTPoison.get("http://169.254.169.254/latest/meta-data/placement/availability-zone") do
-      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+    url = "http://169.254.169.254/latest/meta-data/placement/availability-zone"
+    case :hackney.request(:get, url, [], "", []) do
+      {:ok, 200, _resp_headers, client_ref} ->
+        {:ok, body} = :hackney.body(client_ref)
         String.slice(body, Range.new(0, -2))
       _ ->
         nil
     end
+    # case HTTPoison.get("http://169.254.169.254/latest/meta-data/placement/availability-zone") do
+    #   {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+    #     String.slice(body, Range.new(0, -2))
+    #   _ ->
+    #     nil
+    # end
   end
 
 end
