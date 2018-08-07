@@ -9,7 +9,10 @@ defmodule CloudWatch do
   alias CloudWatch.InputLogEvent
   alias CloudWatch.AwsProxy
 
-  def init(_args) do
+  @spec init(module()) :: {:ok, term()} | {:error, term()}
+  def init(__MODULE__) do
+    {:ok, _} = Application.ensure_all_started(:hackney)
+
     state = configure([])
 
     # If AWS keys are not defined statically, get them from the instance metadata.
@@ -28,6 +31,7 @@ defmodule CloudWatch do
   end
 
   def handle_call({:configure, opts}, _) do
+    Application.put_env(:logger, __MODULE__, opts)
     {:ok, :ok, configure(opts)}
   end
 
@@ -83,14 +87,15 @@ defmodule CloudWatch do
   end
 
   @spec configure(Keyword.t) :: Map.t
-  defp configure(opts) do
-    opts = Keyword.merge(Application.get_env(:logger, CloudWatch, []), opts)
+  def configure(opts) do
+    env = Application.get_env(:logger, __MODULE__, [])
+    opts = Keyword.merge(env, opts)
 
     state = %{
       access_key_id: opts[:access_key_id],
       secret_access_key: opts[:secret_access_key],
-      region: opts[:region] || metadata_region(),
-      endpoint: opts[:endpoint] || metadata_endpoint(),
+      region: opts[:region],
+      endpoint: opts[:endpoint],
       client: nil,
       buffer: [], buffer_size: 0,
       level: opts[:level] || @default_level,
@@ -109,7 +114,7 @@ defmodule CloudWatch do
     end
   end
 
-  defp configure_aws(state) do
+  def configure_aws(state) do
     case System.get_env("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI") do
       nil ->
         # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
@@ -187,7 +192,7 @@ defmodule CloudWatch do
     end
   end
 
-  defp get_metadata(url) do
+  def get_metadata(url) do
     case :hackney.request(:get, url, [], "", []) do
       {:ok, 200, _resp_headers, client_ref} ->
         :hackney.body(client_ref)
@@ -202,7 +207,7 @@ defmodule CloudWatch do
     # end
   end
 
-  defp get_metadata!(url) do
+  def get_metadata!(url) do
     case :hackney.request(:get, url, [], "", []) do
       {:ok, 200, _resp_headers, client_ref} ->
         {:ok, body} = :hackney.body(client_ref)
@@ -218,15 +223,15 @@ defmodule CloudWatch do
     # end
   end
 
-  defp metadata_endpoint do
+  def metadata_endpoint do
     get_metadata!("http://169.254.169.254/latest/meta-data/services/domain")
   end
 
-  defp metadata_instance_id do
+  def metadata_instance_id do
     get_metadata!("http://169.254.169.254/latest/meta-data/instance-id")
   end
 
-  defp metadata_region do
+  def metadata_region do
     url = "http://169.254.169.254/latest/meta-data/placement/availability-zone"
     case :hackney.request(:get, url, [], "", []) do
       {:ok, 200, _resp_headers, client_ref} ->
@@ -235,7 +240,7 @@ defmodule CloudWatch do
       _ ->
         nil
     end
-    # case HTTPoison.get("http://169.254.169.254/latest/meta-data/placement/availability-zone") do
+    # case HTTPoison.get(url) do
     #   {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
     #     String.slice(body, Range.new(0, -2))
     #   _ ->
