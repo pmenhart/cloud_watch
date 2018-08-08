@@ -36,7 +36,7 @@ defmodule CloudWatch.Mixfile do
   # Type "mix help deps" for more examples and options
   defp deps do
     [
-     # {:aws, "~> 0.5.0", optional: true},
+     {:aws, "~> 0.5.0", optional: true},
      {:httpoison, "~> 0.11"},
      {:poison, "~> 3.1"},
      {:hackney, "~> 1.8"},
