@@ -42,7 +42,8 @@ defmodule CloudWatch do
 
   def handle_event({level, _gl, {Logger, msg, ts, md}}, state) do
     case Logger.compare_levels(level, state.level) do
-      :lt -> {:ok, state}
+      :lt ->
+        {:ok, state}
       _ ->
         %{buffer: buffer, buffer_size: buffer_size} = state
 
@@ -52,9 +53,7 @@ defmodule CloudWatch do
 
         buffer = List.insert_at(buffer, -1, %InputLogEvent{message: message, timestamp: ts})
 
-        state
-        |> Map.merge(%{buffer: buffer, buffer_size: buffer_size + byte_size(message) + 26})
-        |> flush()
+        flush(%{state | buffer: buffer, buffer_size: buffer_size + byte_size(message) + 26})
     end
   end
 
@@ -109,6 +108,7 @@ defmodule CloudWatch do
     }
 
     if state.access_key_id do
+      # Static AWS config
       %{state | client: AwsProxy.client(state.access_key_id, state.secret_access_key, state.region, state.endpoint)}
     else
       configure_aws(state)
@@ -139,6 +139,7 @@ defmodule CloudWatch do
         end
       uri ->
         # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-iam-roles.html
+        # This is untested
         case get_metadata("http://169.254.170.2" <> uri) do
           {:ok, json} ->
             {:ok, creds} = Poison.decode(json)
@@ -163,6 +164,7 @@ defmodule CloudWatch do
 
   defp flush(%{buffer: []} = state, _opts), do: {:ok, state}
 
+  # Client not configured yet
   defp flush(%{client: nil} = state, _opts), do: {:ok, state}
 
   defp flush(state, opts) do
@@ -200,12 +202,6 @@ defmodule CloudWatch do
       _ ->
         nil
     end
-    # case HTTPoison.get(url) do
-    #   {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
-    #     {:ok, body}
-    #   _ ->
-    #     nil
-    # end
   end
 
   def get_metadata!(url) do
@@ -216,12 +212,6 @@ defmodule CloudWatch do
       _ ->
         nil
     end
-    # case HTTPoison.get(url) do
-    #   {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
-    #     body
-    #   _ ->
-    #     nil
-    # end
   end
 
   def metadata_endpoint do
@@ -241,12 +231,6 @@ defmodule CloudWatch do
       _ ->
         nil
     end
-    # case HTTPoison.get(url) do
-    #   {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
-    #     String.slice(body, Range.new(0, -2))
-    #   _ ->
-    #     nil
-    # end
   end
 
 end
