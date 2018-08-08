@@ -11,6 +11,8 @@ defmodule CloudWatch do
 
   @spec init(module()) :: {:ok, term()} | {:error, term()}
   def init(__MODULE__) do
+    # Because this is a plugin to Logger, we can't rely on application
+    # dependencies to be started before this is called
     {:ok, _} = Application.ensure_all_started(:hackney)
 
     env = Application.get_env(:logger, __MODULE__, [])
