@@ -12,7 +12,10 @@ defmodule CloudWatchTest do
   setup_all do
     {:ok, _} = Cycler.start_link
     Logger.add_backend(@backend)
-    :ok = Logger.configure_backend(@backend, [format: "$message", level: :info, log_group_name: "testLogGroup", log_stream_name: "testLogStream", max_buffer_size: 39])
+    config = [format: "$message", level: :info, log_group_name: "testLogGroup",
+              log_stream_name: "testLogStream", max_buffer_size: 39,
+              access_key_id: "fake"]
+    :ok = Logger.configure_backend(@backend, config)
   end
 
   setup do

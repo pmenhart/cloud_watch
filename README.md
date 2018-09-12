@@ -32,7 +32,7 @@ Add the backend to `config.exs`:
     utc_log: true
   ```
 
-Configure the following example to suit your needs:
+Following is a full example with the default values:
 
   ```elixir
   config :logger, CloudWatch,
@@ -46,10 +46,22 @@ Configure the following example to suit your needs:
     max_timeout: 60_000
   ```
 
-The `endpoint` may be omitted from the configuration and will default to
-`amazonaws.com`. The `max_buffer_size` controls when `cloud_watch` will flush
-the buffer in bytes. You may specify anything up to a maximum of 1,048,576
-bytes. If omitted, it will default to 10,485 bytes.
+CloudWatch flushes the buffer when it has collected `max_buffer_size` bytes of
+messages or `max_timeout` milliseconds have elapsed. `max_buffer_size` can be
+anything up to a maximum of 1,048,576 bytes. If omitted, it will default to
+10,485 bytes.
+
+CloudWatch supports getting AWS credentials and other defaults from
+[EC2 instance metadata](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html)
+
+In that case, a minimal configuration is:
+
+  ```elixir
+  config :logger, CloudWatch,
+    log_group_name: "api"
+  ```
+
+`log_stream_name` defaults to the instance id.
 
 ## Alternative AWS client library: ExAws
 

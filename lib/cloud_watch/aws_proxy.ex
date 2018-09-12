@@ -8,7 +8,7 @@ defmodule CloudWatch.AwsProxy do
   cond do
     Code.ensure_loaded?(AWS) ->
       # AWS CloudWatch Logs implemented using aws-elixir
-      # See https://github.com/jkakar/aws-elixir
+      # https://github.com/aws-beam/aws-elixir
       #
       # AWS credentials are configured in CloudWatch
       def client(access_key_id, secret_access_key, region, endpoint) do

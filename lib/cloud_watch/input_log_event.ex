@@ -10,6 +10,7 @@ defmodule CloudWatch.InputLogEvent do
       |> Kernel.-(@epoch)
       |> Kernel.*(1000)
       |> Kernel.+(milliseconds)
+
       %{message: message, timestamp: timestamp}
       |> Poison.Encoder.encode(options)
       |> IO.chardata_to_string
