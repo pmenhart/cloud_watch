@@ -146,9 +146,36 @@ defmodule CloudWatch do
         state
         |> Map.put(:sequence_token, nil)
         |> do_flush(opts, log_group_name, log_stream_name)
+      {:error, {"ThrottlingException", "Rate exceeded"}} ->
+        # AWS limit is 5 requests per second per log stream. We are supposed to re-try after a delay
+        # Sleeping here is a quick and dirty hack with possible unwanted consequences
+        # Better approach: introduce a blackout period. Start removing old logs if buffer size exceeded 1 MB during blackout
+        state = state |> add_internal_error("CloudWatch Log ThrottlingException: delaying transfer")
+        Process.sleep(500)
+        flush(state, opts)
+      {:error, {"ExpiredTokenException", _}} ->
+        # aws-elixir may require restarting of state.client; ex_aws handles expired tokens internally
+        flush(state, opts)
       {:error, %HTTPoison.Error{id: nil, reason: reason}} when reason in [:closed, :connect_timeout, :timeout] ->
-        do_flush(state, opts, log_group_name, log_stream_name)
+        state = state |> add_internal_error("CloudWatch Log error #{inspect reason}")
+        Process.sleep(500)
+        flush(state, opts)
     end
+  end
+
+  defp add_internal_error(state, msg) do
+    add_internal_message(state, :error, msg)
+  end
+
+  defp add_internal_message(state, level, msg) do
+    utc_log? = Application.get_env(:logger, :utc_log, false)
+    state
+    |> add_message(
+         level,
+         msg,
+         Logger.Utils.timestamp(utc_log?),
+         Logger.metadata()
+       )
   end
 
   # Apply a MFA tuple (Module, Function, Attributes) to obtain the name. Function must return a string
