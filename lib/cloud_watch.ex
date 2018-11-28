@@ -177,6 +177,10 @@ defmodule CloudWatch do
         state = state |> add_internal_error("CloudWatch Log error #{inspect reason}")
         Process.sleep(500)
         flush(state, opts)
+      {:error, {:http_error, reason}} ->
+        state = state |> add_internal_error("CloudWatch Log unexpected error #{inspect reason}")
+        Process.sleep(500)
+        flush(state, opts)
     end
   end
 
