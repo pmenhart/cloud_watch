@@ -66,8 +66,8 @@ defmodule CloudWatch do
     purge_buffer_if_throttled? = Keyword.get(opts, :purge_buffer_if_throttled, false) # see "ThrottlingException"
 
     # Limit out of memory problems - slow CloudWatch connection may cause message queue grow out of bounds
-    max_heap_size = 4194304 # words are 8 bytes, i.e. 32 MiB
-    :erlang.process_flag(:max_heap_size, max_heap_size) # see http://erlang.org/doc/man/erlang.html
+    max_heap_size = 2 * 4194304 # words are 8 bytes, i.e. 2 * 32 MiB
+    :erlang.process_flag(:max_heap_size, %{size: max_heap_size, kill: false, error_looger: true}) # see http://erlang.org/doc/man/erlang.html
 
     # AWS configuration, only if needed by the AWS library
     region = Keyword.get(opts, :region)
