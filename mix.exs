@@ -43,7 +43,7 @@ defmodule CloudWatch.Mixfile do
     [{:aws, "~> 0.5.0", optional: true},
      {:httpoison, "~> 0.11.1"},
      {:credo, "~> 0.4.13", only: :dev},
-     {:mock, "~> 0.2.0", only: :test},
+     {:mock, "~> 0.3.2", only: :test},
      {:ex_doc, ">= 0.0.0", only: :dev}]
   end
 
