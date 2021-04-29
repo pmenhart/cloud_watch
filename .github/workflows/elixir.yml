@@ -2,9 +2,9 @@ name: Elixir CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, forked_master ]
   pull_request:
-    branches: [ master ]
+    branches: [ master, forked_master ]
 
 jobs:
   build:
@@ -60,4 +60,6 @@ jobs:
         MIX_ENV=test mix deps.compile
 
     - name: Run tests
-      run: mix test --trace
+      run: |
+        mix test --trace
+        #mix format --check-formatted
