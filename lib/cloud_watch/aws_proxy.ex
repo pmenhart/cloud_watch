@@ -66,6 +66,8 @@ defmodule CloudWatch.AwsProxy do
             {:error, {type, message}}
           {:error, {:http_error, error_code, %{} = body}} ->
             {:error, {:http_error, "Status: #{inspect error_code}, details: #{inspect body} "}}
+          {:error, {type, message}} ->
+            {:error, {type, message}}
         end
       end
 
